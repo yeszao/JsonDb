@@ -11,7 +11,7 @@ It's easy and lightweight.
 1. Create an json file. For example `demo.json`.
 2. Include JsonDb.php in project, create an instance using `new JsonDb` and identify json file:
 ```
-  include 'JsonDb.json';
+  include 'JsonDb.php';
   $json = new JsonDb('demo');
 ```
 File extension is not needed, because it has a default value `.json`.
