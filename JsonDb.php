@@ -15,25 +15,80 @@ class JsonDb
      */
     private static $data  = [];
     /**
-     * @var string json file name
+     * @var string json files locate directory
      */
-    private $filename;
+    private $directory;
+    /**
+     * @var string current filename
+     */
+    private $fileName = '';
+    /**
+     * @var string current file path
+     */
+    private $filePath = '';
+    /**
+     * @var string JSON file extension, can be identify on constructing
+     */
+    private $extension;
+    /**
+     * @var array all JSON files name, do not include extension
+     */
+    private static $fileNames = [];
     /**
      * @var string store error if there are some exception catch
      */
     private $error = '';
 
-
     /**
      * JsonDb constructor.
-     * @param $filename string the file name of json file, exclude extension
+     * @param $directory string json files locate directory, exclude extension
      */
-    public function __construct($filename, $primary = 'id', $ext = '.json')
+    public function __construct($directory, $primary = 'id', $extension = '.json')
     {
-        $this->filename = $filename . $ext;
+        $this->directory = rtrim($directory, '/') . '/';
+        if (is_dir($this->directory) === false) {
+            throw new Exception('There is not such directory.');
+        }
         $this->primary = $primary;
+        $this->extension = $extension;
+        self::$fileNames = $this->loadFileNames();
+    }
 
-        self::$data = $this->read();
+    /**
+     * Save current file name and full file path,
+     * and load data from file system if OBJECT data is not set.
+     * @param $name string file name
+     * @return $this current OBJECT
+     * @throws Exception if there is not such file
+     */
+    public function __get($name)
+    {
+        if (in_array($name, self::$fileNames)) {
+            $this->fileName = $name;
+            $this->filePath = $this->directory . $name . $this->extension;
+            if (isset(self::$data[$this->fileName]) === false) {
+                self::$data[$this->fileName] = $this->read();
+            }
+            return $this;
+        }
+
+        $this->error = 'There is not json file named ' . $name . $this->extension;
+        throw new Exception($this->error);
+    }
+
+    /**
+     * load all file names from file system
+     * @return array
+     */
+    private function loadFileNames()
+    {
+        $files = scandir($this->directory);
+        $files = array_diff($files, ['.', '..']);
+        $files =  array_map(function($value) {
+            return strpos($value, $this->extension) ? substr($value, 0, -strlen($this->extension)) : '';
+        }, $files);
+
+        return array_filter($files);
     }
 
     /**
@@ -43,7 +98,7 @@ class JsonDb
      */
     public function insert($value)
     {
-        $data = self::$data;
+        $data = self::$data[$this->fileName];
 
         if (empty($data)) {
             $value[$this->primary] = 1;
@@ -66,7 +121,7 @@ class JsonDb
 
         ksort($data);
         if ($this->write($data)) {
-            self::$data = $data;
+            self::$data[$this->fileName] = $data;
             unset($data);
             return $value[$this->primary];
         }
@@ -74,6 +129,10 @@ class JsonDb
         return false;
     }
 
+    /**
+     * @param $value array insert data
+     * @return bool
+     */
     public function update($value)
     {
         if (!is_array($value)) {
@@ -86,7 +145,7 @@ class JsonDb
             return false;
         }
 
-        $data = self::$data;
+        $data = self::$data[$this->fileName];
         if (!isset($data[$key])) {
             $this->error = 'Record ' . $this->primary . '="' . $key . '" does not exist.';
             return false;
@@ -95,7 +154,7 @@ class JsonDb
         $data[$key] = array_merge($data[$key], $value);
 
         if ($this->write($data)) {
-            self::$data = $data;
+            self::$data[$this->fileName] = $data;
             unset($data);
             return true;
         }
@@ -118,7 +177,7 @@ class JsonDb
         $lackField = 0;
         $notExist = [];
 
-        $data = self::$data;
+        $data = self::$data[$this->fileName];
         foreach ($values as $value) {
             $key = isset($value[$this->primary]) ? (int)$value[$this->primary] : 0;
             if (!$key) {
@@ -142,7 +201,7 @@ class JsonDb
         }
 
         if ($this->write($data)) {
-            self::$data = $data;
+            self::$data[$this->fileName] = $data;
             unset($data);
             return $success;
         }
@@ -150,6 +209,10 @@ class JsonDb
         return false;
     }
 
+    /**
+     * @param $key mixed key or keys to delete
+     * @return bool
+     */
     public function delete($key)
     {
         if (!$key) {
@@ -157,7 +220,7 @@ class JsonDb
             return false;
         }
 
-        $data = self::$data;
+        $data = self::$data[$this->fileName];
         if ($key === '*') {
             $data = [];
         } elseif (is_array($key)) {
@@ -169,16 +232,20 @@ class JsonDb
         }
 
         if ($this->write($data)) {
-            self::$data = $data;
+            self::$data[$this->fileName] = $data;
             unset($data);
             return true;
         }
         return false;
     }
 
+    /**
+     * @param $key string re
+     * @return array
+     */
     public function select($key)
     {
-        return $key ? self::$data[$key] : [];
+        return $key ? self::$data[$this->fileName][$key] : [];
     }
 
     /**
@@ -192,7 +259,7 @@ class JsonDb
         }
         $keys = array_flip($keys);
 
-        return array_diff_key(self::$data, $keys);
+        return array_diff_key(self::$data[$this->fileName], $keys);
     }
 
     /**
@@ -210,7 +277,7 @@ class JsonDb
             $direct = 'asc';
         }
 
-        $data = self::$data;
+        $data = self::$data[$this->fileName];
         uasort($data, function ($a, $b) use ($sortKey, $direct){
             $prev = isset($a[$sortKey]) ? (int)$a[$sortKey] : 0;
             $next = isset($b[$sortKey]) ? (int)$b[$sortKey] : 0;
@@ -223,7 +290,7 @@ class JsonDb
 
     public function count()
     {
-        return count(self::$data);
+        return count(self::$data[$this->fileName]);
     }
 
     public function getError()
@@ -233,12 +300,12 @@ class JsonDb
 
     private function read()
     {
-        $content = file_get_contents($this->filename);
+        $content = file_get_contents($this->filePath);
         return (array)json_decode($content, true);
     }
 
     private function write($data)
     {
-        return file_put_contents($this->filename, json_encode($data));
+        return file_put_contents($this->filePath, json_encode($data));
     }
 }

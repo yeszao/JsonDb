@@ -1,9 +1,9 @@
 <?php
 include '../JsonDb.php';
 
-$json = new JsonDb('demo');
+$json = new JsonDb('./db');
 
 $data = ['name' => 'Gary', 'title' => 'PHP', 'website' => 'http://www.awaimai.com/'];
-echo $json->insert($data);  //return the inserted id
-print_r($json->selectAll()); // return all record
-$json->delete('*');
+echo $json->demo->insert($data);      //return the inserted id
+print_r($json->demo->selectAll());    // return all record
+$json->demo->delete('*');
