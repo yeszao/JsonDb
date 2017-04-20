@@ -1,7 +1,7 @@
 <?php
 include '../JsonDb.php';
 
-$json = new JsonDb('./db');
+$json = new JsonDb('./files');
 
 $data = ['name' => 'Gary', 'title' => 'PHP', 'website' => 'http://www.awaimai.com/'];
 echo $json->demo->insert($data);      //return the inserted id
